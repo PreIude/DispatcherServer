@@ -1,0 +1,170 @@
+#!/bin/bash
+umask 0077
+
+trap "rm -f /tmp/*${USER}-fifo; kill 0" SIGINT EXIT
+
+# set up some globals
+SERVER_FIFO="/tmp/server-${USER}-fifo"
+SERVER_PATH="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# make pipes
+[ -p "$SERVER_FIFO" ] || mkfifo "$SERVER_FIFO"
+
+# calculate number of processors
+num_processors="$(getconf _NPROCESSORS_ONLN)"
+
+freeCount=$num_processors
+
+processes_completed=0
+statCheck=0
+shutdown=0
+
+busy=0
+
+echo "Starting up $num_processors processing units"
+
+declare -a processor_status
+declare -a processor_pid
+
+for ((i = 1; i <= $num_processors; i++))
+do
+	processor_status[$i]=0
+    "$SERVER_PATH/mgProcessor" "$i"&
+	pid=$(echo "$!")
+	processor_pid[$i]=$pid
+	sleep 0.1
+done
+
+
+
+echo "Ready for processing : place jobs into $SERVER_FIFO"
+# recieve requests
+while true
+do
+	# check for special states
+	if read line <$SERVER_FIFO; then
+		sleep 0.1
+        if [[ "$line" == 'shutdown' ]]; then
+			shutdown=1
+		elif [[ "$line" == 'status' ]]; then
+			statCheck=1
+        fi
+    fi
+	
+	#get ready to shutdown everything if '-x' was submitted
+	if [ $shutdown -eq 1 ]; then
+		echo "Shutdown command detected"
+		readyToStop=0
+		for ((i = 1; i <= $num_processors; i++))
+		do
+			if [ ${processor_status[$i]} -eq 0 ]; then	
+				echo "Processor $i has stopped"
+				let "readyToStop++"
+			else
+				echo "Waiting for processor $i to finish..."
+			fi
+		done
+		echo "Finishing up work..."
+		while [ $readyToStop -ne $num_processors ]
+		do
+			for ((i = 1; i <= $num_processors; i++))
+			do
+				if [ ${processor_status[$i]} == 1 ]; then
+					status=$(timeout 0.01 "./peak" $"/tmp/status#$i-${USER}-fifo")
+					if [ "$status" == "idle" ]; then
+						let "readyToStop++"				
+						processor_status[$i]=0
+					fi
+				fi
+			done
+		done
+		for ((i = 1; i <= $num_processors; i++))
+		do 
+			kill ${processor_pid[$i]}
+		done
+		echo "System shutdown complete"
+		exit 0
+	fi
+	
+	# populate processor status states
+	for ((i = 1; i <= $num_processors; i++))
+	do
+		# check last known status of processors which were marked active
+		if [ ${processor_status[$i]} == 1 ]; then
+			# check if the processor's status is idle then mark it is as free, otherwise it's still busy
+			status=$(timeout 0.01 "./peak" $"/tmp/status#$i-${USER}-fifo")
+			if [ "$status" == "idle" ]; then
+				let "processes_completed++"				
+				processor_status[$i]=0
+				let "freeCount++"
+				busy=0
+			fi
+		fi
+	done
+
+	# check if there's an avaliable processor
+	if [ $freeCount -eq 0 ];then
+		echo "All processors are currently busy"
+		echo "Waiting..."
+		busy=1
+	fi
+
+	# wait for a processor to free up if all processors are busy
+	while [ $busy -eq 1 ]
+	do 
+		for ((i = 1; i <= $num_processors; i++))
+		do
+			# check last known status of processors which were marked active
+			if [ ${processor_status[$i]} == 1 ]; then
+				# check if the processor's status is idle then mark it is as free, otherwise it's still busy
+				status=$(timeout 0.1 "./peak" $"/tmp/status#$i-${USER}-fifo")
+				if [ "$status" == "idle" ]; then
+					let "processes_completed++"				
+					processor_status[$i]=0
+					let "freeCount++"
+					busy=0
+				fi
+			fi
+		done
+	done
+
+	# output status for "-s"
+	if [ $statCheck -eq 1 ]; then
+		statCheck=0
+		echo "Number of processors: $num_processors"
+		echo "Number of jobs processed: $processes_completed"
+		for ((i = 1; i <= $num_processors; i++))
+		do
+			if [ ${processor_status[$i]} -eq 0 ];then	
+				echo "Processor $i: idle"
+			else
+				echo "Processor $i: busy"
+			fi
+		done
+		continue
+	fi
+
+	# get lowest numbered avaliable processor 
+	for ((i = 1; i <= $num_processors; i++))
+	do
+		if [ ${processor_status[$i]} -eq 0 ];then	
+			available=$i
+			break
+		fi
+	done
+
+	# send command to avaliable processor 
+	echo "Sending '$line' to Processor $available"
+	echo "$line" > $"/tmp/processor#$available-${USER}-fifo"
+	rm -rf "${path}temp/.processor#$available"
+	while true; do
+		if mkdir -p "${path}temp/.processor#$available"; then
+			break;
+		fi
+		sleep 0.5
+	done
+
+	processor_status[$available]=1
+	let "freeCount--"
+done
+

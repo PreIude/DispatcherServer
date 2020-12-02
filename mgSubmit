@@ -1,0 +1,41 @@
+#!/bin/bash
+umask 0077
+#
+# This program is part of the Mini Grid system.  It allows nicer
+# submission of jobs
+#
+
+# use the same socket that the server will listen on
+SERVER_FIFO="/tmp/server-${USER}-fifo"
+
+#check if pipe exists
+if [ ! -p $SERVER_FIFO ]
+then 
+    echo "Error: Server pipe does not exist, make sure server is running"
+    exit 0
+fi
+
+#check if correct number of arguments (>=1)
+if [ "$#" -lt 1 ]; then
+    echo "Error: Invalid number of arguments"
+    exit 0
+fi
+
+# First, handle the '-x' and '-s' options -- if they are present,
+# then send the appropriate command and then exit
+if [ $1 = "-x" ]
+then
+	echo "Attempting to Exit"
+	echo "shutdown" > $SERVER_FIFO
+	exit 0
+elif [ $1 = "-s" ]
+then
+	echo "Checking Status"
+	echo "status" > $SERVER_FIFO
+	exit 0
+fi
+# Now, take the command line we have been given and
+# send it to the server
+echo "Submitting"
+echo "$*" > $SERVER_FIFO
+exit 0

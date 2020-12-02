@@ -1,0 +1,38 @@
+#!/bin/bash
+
+echo "Test #1"
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit -s
+
+echo "Test #2"
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit ./timedCountdown
+./mgSubmit -s
+./mgSubmit -x

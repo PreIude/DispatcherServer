@@ -1,0 +1,28 @@
+#!/bin/bash
+umask 0077
+
+id=$1
+
+STATUS_FIFO="/tmp/status#$id-${USER}-fifo"
+PROCESSOR_FIFO="/tmp/processor#$id-${USER}-fifo"
+
+let "logID=$1-1"
+log="/tmp/processor-$USER.${logID}.log"
+
+[ -p "$STATUS_FIFO" ] || mkfifo "$STATUS_FIFO"
+[ -p "$PROCESSOR_FIFO" ] || mkfifo "$PROCESSOR_FIFO"
+
+echo "Processor $id started, waiting for task..."
+while true
+do
+    if read line <$PROCESSOR_FIFO; then
+        echo "Processor $id executing '$line'..."
+        echo "Running '$line' - $(date)" >> $log
+        rm -rf "${path}temp/.processor#$id"
+        sleep 0.5
+        $"$line" >> $log
+        echo "'$line' Complete - $(date)" >> $log
+        echo "Processor $id done '$line'"
+        echo "idle" >> $STATUS_FIFO
+    fi
+done
